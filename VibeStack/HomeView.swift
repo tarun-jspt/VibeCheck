@@ -28,52 +28,48 @@ struct VibeCard: View {
     var body: some View {
         let accent = vibeIntensityColor(entry.intensity)
 
-        HStack(spacing: 16) {
+        ZStack {
+            // Background card chrome is applied by modifiers below
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 10) {
+                    // Date + time (two lines)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(entry.timestamp, format: .dateTime.hour().minute())
+                            .font(.system(size: 14, weight: .regular, design: .monospaced))
+                            .foregroundStyle(DS.textMuted)
+                    }
+                    .matchedGeometryEffect(id: "time-\(entry.id)", in: namespace)
 
-            // Emoji bubble — matched for hero transition
-            ZStack {
-                Circle()
-                    .fill(accent.opacity(0.18))
-                    .matchedGeometryEffect(id: "bubble-\(entry.id)", in: namespace)
-                    .frame(width: 52, height: 52)
-                Image(entry.moodID)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 26, height: 26)
-                    .matchedGeometryEffect(id: "emoji-\(entry.id)", in: namespace)
-            }
+                    // Headline: I'm feeling ...
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("I'm kinda feeling")
+                            .font(.system(size: 20, weight: .heavy))
+                            .italic()
+                            .foregroundStyle(DS.textPrimary)
 
-            // Note + intensity pip row
-            VStack(alignment: .leading, spacing: 6) {
-                Text(entry.note.isEmpty ? "No note" : entry.note)
-                    .font(.system(size: 15, weight: .medium, design: .rounded))
-                    .foregroundStyle(entry.note.isEmpty ? DS.textMuted : DS.textPrimary)
-                    .lineLimit(1)
-
-                HStack(spacing: 4) {
-                    ForEach(1...5, id: \.self) { pip in
-                        Capsule()
-                            .fill(Double(pip) <= entry.intensity
-                                  ? accent : DS.textMuted.opacity(0.3))
-                            .frame(width: Double(pip) <= entry.intensity ? 14 : 8, height: 4)
-                            .matchedGeometryEffect(id: "pip-\(entry.id)-\(pip)", in: namespace)
+                        // Mood description line(s)
+                        moodStyledText(accent: accent)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // Emblem bubble on the right
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(0.18))
+                        .matchedGeometryEffect(id: "bubble-\(entry.id)", in: namespace)
+                        .frame(width: 60, height: 60)
+                    Image(entry.moodID)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 40, height: 40)
+                        .matchedGeometryEffect(id: "emoji-\(entry.id)", in: namespace)
+                }
             }
-
-            Spacer(minLength: 0)
-
-            // Timestamp — matched for hero transition
-            Text(vibeRelativeTimestamp(entry.timestamp))
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                .foregroundStyle(DS.textMuted)
-                .fixedSize()
-                .matchedGeometryEffect(id: "time-\(entry.id)", in: namespace)
         }
         .padding(.horizontal, 18)
-        .frame(height: DS.cardHeight)
+        .frame(height: 120)
         .vibeGlass(cornerRadius: DS.cardCorner)
-        // Left intensity accent stripe
         .overlay(alignment: .leading) {
             RoundedRectangle(cornerRadius: 3)
                 .fill(accent)
@@ -82,6 +78,37 @@ struct VibeCard: View {
                 .clipShape(RoundedRectangle(cornerRadius: DS.cardCorner, style: .continuous))
         }
         .matchedGeometryEffect(id: "card-\(entry.id)", in: namespace)
+    }
+
+    @ViewBuilder
+    private func moodStyledText(accent: Color) -> some View {
+        // Derive the descriptive text. If note is empty, fall back to emoji or moodID.
+        let description: String = entry.moodEmoji
+
+        // Split on common separators to allow multi-accent styling like "ecstatic & irritated"
+        let parts = description
+            .replacingOccurrences(of: ",", with: " & ")
+            .components(separatedBy: "&")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+
+        // Secondary accent derived from the main accent (slightly warmer/cooler)
+        let secondary = accent.opacity(0.9)
+
+        if parts.isEmpty {
+            Text(description)
+                .font(.system(size: 22, weight: .bold, design: .rounded))
+                .foregroundStyle(accent)
+        } else {
+            HStack(spacing: 0) {
+                ForEach(Array(parts.enumerated()), id: \.offset) { idx, word in
+                    let color = (idx % 2 == 0) ? accent : secondary
+                    Text(idx == 0 ? word : " \u{26}& \u{00A0}" + word)
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(color)
+                }
+            }
+        }
     }
 }
 
@@ -223,7 +250,22 @@ struct VibeEmptyState: View {
 // MARK: - HomeView
 
 struct HomeView: View {
-    @Query(sort: \VibeEntry.timestamp, order: .reverse) private var entries: [VibeEntry]
+    @State private var todayRange: (start: Date, end: Date) = {
+        let start = Calendar.current.startOfDay(for: Date())
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: start)!
+        return (start, end)
+    }()
+
+    @Query(
+        sort: \VibeEntry.timestamp,
+        order: .reverse
+    )
+    private var allEntries: [VibeEntry]
+
+    private var entries: [VibeEntry] {
+        allEntries.filter { $0.timestamp >= todayRange.start && $0.timestamp < todayRange.end }
+    }
+
     @Environment(\.modelContext) private var modelContext
 
     @State private var showAddVibe    = false
@@ -235,6 +277,8 @@ struct HomeView: View {
     @State private var showHistory   = false
 
     @Namespace private var cardNamespace
+
+    init() {}
 
     // MARK: Filtered list
 
