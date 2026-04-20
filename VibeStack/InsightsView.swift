@@ -19,13 +19,56 @@ struct EmojiFrequency: Identifiable {
 
 /// Returns midnight of `daysAgo` days before today.
 private func startOf(daysAgo: Int) -> Date {
-    Calendar.current.startOfDay(for: Date.now) - TimeInterval(daysAgo * 86400)
+    let cal = Calendar.current
+    let todayStart = cal.startOfDay(for: Date())
+    return cal.date(byAdding: .day, value: -daysAgo, to: todayStart)!
+}
+
+private func startOfCurrentWeekMonday() -> Date {
+    var cal = Calendar.current
+    cal.firstWeekday = 2 // Monday
+    let now = Date()
+    let comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
+    let startOfWeek = cal.date(from: comps)!
+    return cal.startOfDay(for: startOfWeek)
+}
+
+private func weekRange(offset: Int = 0) -> (start: Date, end: Date) {
+    // offset = 0 → current week (Mon 00:00 … next Mon 00:00)
+    // offset = -1 → previous week, etc.
+    var cal = Calendar.current
+    cal.firstWeekday = 2 // Monday
+    let startThisWeek = startOfCurrentWeekMonday()
+    let start = cal.date(byAdding: .weekOfYear, value: offset, to: startThisWeek)!
+    let end   = cal.date(byAdding: .weekOfYear, value: offset + 1, to: startThisWeek)!
+    return (start, end)
+}
+
+private func weekLabel(offset: Int) -> String {
+    let r = weekRange(offset: offset)
+    let f = DateFormatter()
+    f.dateFormat = "MMM d"
+    return "\(f.string(from: r.start)) – \(f.string(from: r.end.addingTimeInterval(-1)))"
 }
 
 private func shortWeekday(_ date: Date) -> String {
     let f = DateFormatter()
     f.dateFormat = "EEE"
     return f.string(from: date)
+}
+
+private func weekDayPoints(from entries: [VibeEntry], offset: Int = 0) -> [DailyPoint] {
+    // offset: 0 → current week (Mon…Sun), -1 → previous week, etc.
+    let r = weekRange(offset: offset)
+    let cal = Calendar.current
+
+    return (0..<7).map { i in
+        let dayStart = cal.date(byAdding: .day, value: i, to: r.start)!
+        let dayEnd   = cal.date(byAdding: .day, value: 1, to: dayStart)!
+        let slice    = entries.filter { $0.timestamp >= dayStart && $0.timestamp < dayEnd }
+        let avg      = slice.isEmpty ? 0.0 : slice.map(\.intensity).reduce(0, +) / Double(slice.count)
+        return DailyPoint(date: dayStart, avgIntensity: avg, label: shortWeekday(dayStart))
+    }
 }
 
 // MARK: - View-model logic (pure functions, no ObservableObject needed)
@@ -207,19 +250,26 @@ struct InsightsSectionHeader: View {
 struct InsightsView: View {
     @Query(sort: \VibeEntry.timestamp, order: .reverse) private var allEntries: [VibeEntry]
 
+    @State private var selectedWeekOffset: Int = 0 // 0 = this week, -1 = last week
+
     private let bg    = Color(red: 0.11, green: 0.11, blue: 0.13)
     private let card  = Color(red: 0.17, green: 0.17, blue: 0.20)
 
     // Derived data
     private var thisWeek: [VibeEntry] {
-        allEntries.filter { $0.timestamp >= startOf(daysAgo: 7) }
+        let r = weekRange(offset: 0)
+        return allEntries.filter { $0.timestamp >= r.start && $0.timestamp < r.end }
     }
     private var lastWeek: [VibeEntry] {
-        let end   = startOf(daysAgo: 7)
-        let start = startOf(daysAgo: 14)
-        return allEntries.filter { $0.timestamp >= start && $0.timestamp < end }
+        let r = weekRange(offset: -1)
+        return allEntries.filter { $0.timestamp >= r.start && $0.timestamp < r.end }
     }
-    private var chartPoints:  [DailyPoint]      { last7DayPoints(from: thisWeek) }
+    private var chartPoints: [DailyPoint] {
+        let r = weekRange(offset: selectedWeekOffset)
+        // Filter entries for the selected week window
+        let entriesForSelectedWeek = allEntries.filter { $0.timestamp >= r.start && $0.timestamp < r.end }
+        return weekDayPoints(from: entriesForSelectedWeek, offset: selectedWeekOffset)
+    }
     private var emojiItems:   [EmojiFrequency]  { topEmojis(from: thisWeek) }
     private var summaryText:  String            { moodSummary(thisWeek: thisWeek, lastWeek: lastWeek) }
 
@@ -233,9 +283,19 @@ struct InsightsView: View {
 
                         // ── Chart card ────────────────────────────────
                         VStack(alignment: .leading, spacing: 16) {
-                            InsightsSectionHeader(title: "Vibe Intensity · 7 days",
-                                                  icon: "waveform.path.ecg")
+                            HStack {
+                                InsightsSectionHeader(title: "Vibe Intensity", icon: "waveform.path.ecg")
+                                Spacer()
+                                Picker("Week", selection: $selectedWeekOffset) {
+                                    Text("This Week").tag(0)
+                                    Text("Last Week").tag(-1)
+                                }
+                                .pickerStyle(.segmented)
+                                .frame(maxWidth: 220)
+                            }
+
                             IntensityLineChart(points: chartPoints)
+                                .animation(.easeInOut(duration: 0.25), value: selectedWeekOffset)
                         }
                         .padding(20)
                         .background(card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
@@ -246,7 +306,7 @@ struct InsightsView: View {
 
                         // ── AI Summary card ───────────────────────────
                         VStack(alignment: .leading, spacing: 10) {
-                            InsightsSectionHeader(title: "Mood Summary", icon: "sparkles")
+                            InsightsSectionHeader(title: "Mood Summary", icon: "wand.and.stars")
 
                             Text(summaryText)
                                 .font(.system(size: 15, weight: .medium, design: .rounded))
