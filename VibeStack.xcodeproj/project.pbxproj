@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		810FD0552F968755009100DE /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = 810FD0542F968750009100DE /* .gitignore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXCopyFilesBuildPhase section */
 		81892CEF2F7DEE620094FD58 /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
@@ -20,6 +24,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		810FD0542F968750009100DE /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		81892CB02F7DE50A0094FD58 /* VibeStack.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VibeStack.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		81892CDA2F7DEE610094FD58 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -46,6 +51,7 @@
 		81892CA72F7DE50A0094FD58 = {
 			isa = PBXGroup;
 			children = (
+				810FD0542F968750009100DE /* .gitignore */,
 				81892CB22F7DE50A0094FD58 /* VibeStack */,
 				81892CD72F7DEE610094FD58 /* Frameworks */,
 				81892CB12F7DE50A0094FD58 /* Products */,
@@ -133,6 +139,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				810FD0552F968755009100DE /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
